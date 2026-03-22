@@ -26,4 +26,15 @@
 	   <packageUrl regex="true">^pkg:javascript/jquery@.*$</packageUrl>
 	   <vulnerabilityName regex="true">^jquery issue:.*$</vulnerabilityName>
 	</suppress>
+	 <suppress until="2026-09-22Z">
+       <notes><![CDATA[
+       mchange-commons-java is a transitive dependency of c3p0 (connection pool).
+       It is not directly exposed to untrusted input in OpenMRS. The CVEs relate to
+       deserialization gadgets that require attacker-controlled serialized data on the
+       classpath, which is not applicable to this runtime context.
+       Tracked in TRUNK-6588. Suppress until upstream releases a patched version.
+       ]]></notes>
+       <packageUrl regex="true">^pkg:maven/com\.mchange/mchange-commons-java@.*$</packageUrl>
+       <cve>CVE-2019-10095</cve>
+    </suppress>
 </suppressions>
