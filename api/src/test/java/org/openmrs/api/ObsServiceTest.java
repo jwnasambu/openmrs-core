@@ -29,9 +29,20 @@ import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+
 import javax.imageio.ImageIO;
 
+import static org.hamcrest.MatcherAssert.assertThat;
+import static org.hamcrest.core.Is.is;
 import org.jetbrains.annotations.NotNull;
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.fail;
 import org.junit.jupiter.api.Test;
 import org.openmrs.Concept;
 import org.openmrs.ConceptName;
@@ -58,17 +69,6 @@ import org.openmrs.util.OpenmrsConstants;
 import org.openmrs.util.OpenmrsConstants.PERSON_TYPE;
 import org.openmrs.util.OpenmrsUtil;
 import org.springframework.beans.factory.annotation.Autowired;
-
-import static org.hamcrest.MatcherAssert.assertThat;
-import static org.hamcrest.core.Is.is;
-import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertNotNull;
-import static org.junit.jupiter.api.Assertions.assertNull;
-import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.junit.jupiter.api.Assertions.assertTrue;
-import static org.junit.jupiter.api.Assertions.fail;
 
 /**
  * TODO clean up and add tests for all methods in ObsService
@@ -2162,6 +2162,7 @@ public class ObsServiceTest extends BaseContextSensitiveTest {
 		unrelatedObs.setConcept(latestObs.getConcept());
 		unrelatedObs.setPerson(latestObs.getPerson());
 		unrelatedObs.setObsDatetime(new java.util.Date());
+		unrelatedObs.setValueNumeric(10.0);
 		unrelatedObs = Context.getObsService().saveObs(unrelatedObs, "testing unrelated");
 		List<Obs> unrelatedVersions = obsService.getObsVersionHistory(unrelatedObs);
 		assertNotNull(unrelatedVersions);
@@ -2176,6 +2177,7 @@ public class ObsServiceTest extends BaseContextSensitiveTest {
 			o.setConcept(latestObs.getConcept());
 			o.setPerson(latestObs.getPerson());
 			o.setObsDatetime(new java.util.Date());
+			o.setValueNumeric((double) i);
 			if (prev != null) {
 				o.setPreviousVersion(prev);
 			} else {
@@ -2194,6 +2196,7 @@ public class ObsServiceTest extends BaseContextSensitiveTest {
 		unsaved.setConcept(latestObs.getConcept());
 		unsaved.setPerson(latestObs.getPerson());
 		unsaved.setObsDatetime(new java.util.Date());
+		unsaved.setValueNumeric(5.0);
 		List<Obs> unsavedVersions = obsService.getObsVersionHistory(unsaved);
 		assertNotNull(unsavedVersions);
 		assertEquals(1, unsavedVersions.size());
@@ -2241,9 +2244,9 @@ public class ObsServiceTest extends BaseContextSensitiveTest {
 	@Test
 	public void getObsVersionHistory_shouldReturnPartialHistoryForIntermediateVersion() {
 		executeDataSet(PREVIOUS_VERSIONS_OBS_XML);
-		Obs intermediateObs = obsService.getObs(90101); // middle of the chain
+		Obs intermediateObs = obsService.getObs(90101);
 		List<Obs> versions = obsService.getObsVersionHistory(intermediateObs);
-		assertEquals(2, versions.size()); // only 90101 and 90100, not 90102
+		assertEquals(2, versions.size());
 		assertEquals(Integer.valueOf(90101), versions.get(0).getObsId());
 		assertEquals(Integer.valueOf(90100), versions.get(1).getObsId());
 	}
