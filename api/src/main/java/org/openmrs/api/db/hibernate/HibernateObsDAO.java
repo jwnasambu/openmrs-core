@@ -81,10 +81,11 @@ public class HibernateObsDAO implements ObsDAO {
 		// then load the Obs entities in one IN-clause query.
 
 		// Results are ordered newest→oldest (descending date_created) to match the traversal order.
-		String cteSql = "WITH RECURSIVE version_chain (obs_id, previous_version, date_created) AS ("
-		        + "  SELECT obs_id, previous_version, date_created FROM obs WHERE obs_id = :startId   UNION ALL"
-		        + "  SELECT o.obs_id, o.previous_version, o.date_created  FROM obs o"
-		        + "  INNER JOIN version_chain vc ON o.obs_id = vc.previous_version)" + "SELECT obs_id FROM version_chain";
+		String cteSql = "WITH RECURSIVE version_chain (obs_id, previous_version, depth) AS ("
+		        + "  SELECT obs_id, previous_version, 0 FROM obs WHERE obs_id = :startId " + "UNION ALL "
+		        + "  SELECT o.obs_id, o.previous_version, vc.depth + 1 FROM obs o "
+		        + "INNER JOIN version_chain vc ON o.obs_id = vc.previous_version) "
+		        + "SELECT obs_id FROM version_chain ORDER BY depth";
 
 		Session session = sessionFactory.getCurrentSession();
 		List<Integer> ids = session.createNativeQuery(cteSql, Integer.class).setParameter("startId", obs.getObsId()).list();

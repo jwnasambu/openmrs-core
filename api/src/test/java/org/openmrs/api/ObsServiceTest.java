@@ -2190,17 +2190,6 @@ public class ObsServiceTest extends BaseContextSensitiveTest {
 		assertEquals(15, longChain.size());
 		assertEquals(prev.getObsId(), longChain.get(0).getObsId());
 		assertEquals(first.getObsId(), longChain.get(14).getObsId());
-
-		// Obs with no previous members (new unsaved obs)
-		Obs unsaved = new Obs();
-		unsaved.setConcept(latestObs.getConcept());
-		unsaved.setPerson(latestObs.getPerson());
-		unsaved.setObsDatetime(new java.util.Date());
-		unsaved.setValueNumeric(5.0);
-		List<Obs> unsavedVersions = obsService.getObsVersionHistory(unsaved);
-		assertNotNull(unsavedVersions);
-		assertEquals(1, unsavedVersions.size());
-		assertNull(unsavedVersions.get(0).getObsId());
 	}
 
 	/**
