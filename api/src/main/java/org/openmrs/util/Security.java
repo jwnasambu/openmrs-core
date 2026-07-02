@@ -82,7 +82,9 @@ public class Security {
 		if (storedHash == null) {
 			return false;
 		}
-		String encodedPassword = storedHash + ":" + (storedSalt != null ? storedSalt : "");
+		String encodedPassword = storedSalt != null && !storedSalt.isEmpty()
+			? storedHash + ":" + storedSalt
+			: storedHash;
 		return getPasswordEncoder().matches(rawPassword, encodedPassword);
 	}
 
