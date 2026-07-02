@@ -51,7 +51,7 @@ public class Security {
 		}
 		catch (RuntimeException e) {
 			log.debug("Falling back to legacy password encoder", e);
-			return OpenmrsPasswordEncoder.create();
+			return new LegacyOpenmrsPasswordEncoder();
 		}
 	}
 
@@ -79,6 +79,9 @@ public class Security {
 	 * @since 2.8.8
 	 */
 	public static boolean checkPassword(String rawPassword, String storedHash, String storedSalt) {
+		if (storedHash == null) {
+			return false;
+		}
 		String encodedPassword = storedHash + ":" + (storedSalt != null ? storedSalt : "");
 		return getPasswordEncoder().matches(rawPassword, encodedPassword);
 	}
