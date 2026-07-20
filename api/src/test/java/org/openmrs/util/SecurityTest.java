@@ -37,22 +37,20 @@ public class SecurityTest {
 	 */
 	@Test
 	public void encodeString_shouldEncodeStringsToXCharactersWithXCharactersSalt() throws Exception {
-		org.openmrs.api.AdministrationService adminService = org.mockito.Mockito.mock(org.openmrs.api.AdministrationService.class);
-		org.mockito.Mockito.when(adminService.getGlobalProperty(OpenmrsConstants.GP_ARGON2_SALT_LENGTH, "16")).thenReturn("8");
-		org.mockito.Mockito.when(adminService.getGlobalProperty(OpenmrsConstants.GP_ARGON2_HASH_LENGTH, "32")).thenReturn("32");
-		org.mockito.Mockito.when(adminService.getGlobalProperty(OpenmrsConstants.GP_ARGON2_PARALLELISM, "1")).thenReturn("1");
-		org.mockito.Mockito.when(adminService.getGlobalProperty(OpenmrsConstants.GP_ARGON2_MEMORY, "65536")).thenReturn("65536");
-		org.mockito.Mockito.when(adminService.getGlobalProperty(OpenmrsConstants.GP_ARGON2_ITERATIONS, "3")).thenReturn("3");
-
-		java.lang.reflect.Method getServiceContextMethod = org.openmrs.api.context.Context.class.getDeclaredMethod("getServiceContext");
-		getServiceContextMethod.setAccessible(true);
-		org.openmrs.api.context.ServiceContext serviceContext = (org.openmrs.api.context.ServiceContext) getServiceContextMethod.invoke(null);
-		org.openmrs.api.AdministrationService originalAdministrationService = serviceContext.getAdministrationService();
-		serviceContext.setService(org.openmrs.api.AdministrationService.class, adminService);
+		java.util.Properties originalProps = org.openmrs.api.context.Context.getRuntimeProperties();
+		java.util.Properties testProps = new java.util.Properties();
+		testProps.putAll(originalProps);
+		testProps.setProperty("security.argon2.saltLength", "8");
+		testProps.setProperty("security.argon2.hashLength", "32");
+		testProps.setProperty("security.argon2.parallelism", "1");
+		testProps.setProperty("security.argon2.memory", "65536");
+		testProps.setProperty("security.argon2.iterations", "3");
+		org.openmrs.api.context.Context.setRuntimeProperties(testProps);
 		try {
 			Security.resetEncoder();
 			String hash1 = Security.encodeString("test");
-			org.mockito.Mockito.when(adminService.getGlobalProperty(OpenmrsConstants.GP_ARGON2_SALT_LENGTH, "16")).thenReturn("16");
+			testProps.setProperty("security.argon2.saltLength", "16");
+			org.openmrs.api.context.Context.setRuntimeProperties(testProps);
 			Security.resetEncoder();
 			String hash2 = Security.encodeString("test");
 			String[] parts1 = hash1.split("\\$");
@@ -62,25 +60,22 @@ public class SecurityTest {
 			assertTrue(parts1[4].length() != parts2[4].length());
 		}
 		finally {
-			serviceContext.setService(org.openmrs.api.AdministrationService.class, originalAdministrationService);
+			org.openmrs.api.context.Context.setRuntimeProperties(originalProps);
 			Security.resetEncoder();
 		}
 	}
 
 	@Test
-	public void encodeString_shouldUseDefaultValuesWhenGlobalPropertyValuesAreInvalid() throws Exception {
-		org.openmrs.api.AdministrationService adminService = org.mockito.Mockito.mock(org.openmrs.api.AdministrationService.class);
-		org.mockito.Mockito.when(adminService.getGlobalProperty(OpenmrsConstants.GP_ARGON2_SALT_LENGTH, "16")).thenReturn("-5");
-		org.mockito.Mockito.when(adminService.getGlobalProperty(OpenmrsConstants.GP_ARGON2_HASH_LENGTH, "32")).thenReturn("0");
-		org.mockito.Mockito.when(adminService.getGlobalProperty(OpenmrsConstants.GP_ARGON2_PARALLELISM, "1")).thenReturn("invalid");
-		org.mockito.Mockito.when(adminService.getGlobalProperty(OpenmrsConstants.GP_ARGON2_MEMORY, "65536")).thenReturn("abc");
-		org.mockito.Mockito.when(adminService.getGlobalProperty(OpenmrsConstants.GP_ARGON2_ITERATIONS, "3")).thenReturn("-1");
-
-		java.lang.reflect.Method getServiceContextMethod = org.openmrs.api.context.Context.class.getDeclaredMethod("getServiceContext");
-		getServiceContextMethod.setAccessible(true);
-		org.openmrs.api.context.ServiceContext serviceContext = (org.openmrs.api.context.ServiceContext) getServiceContextMethod.invoke(null);
-		org.openmrs.api.AdministrationService originalAdministrationService = serviceContext.getAdministrationService();
-		serviceContext.setService(org.openmrs.api.AdministrationService.class, adminService);
+	public void encodeString_shouldUseDefaultValuesWhenRuntimePropertyValuesAreInvalid() throws Exception {
+		java.util.Properties originalProps = org.openmrs.api.context.Context.getRuntimeProperties();
+		java.util.Properties testProps = new java.util.Properties();
+		testProps.putAll(originalProps);
+		testProps.setProperty("security.argon2.saltLength", "-5");
+		testProps.setProperty("security.argon2.hashLength", "0");
+		testProps.setProperty("security.argon2.parallelism", "invalid");
+		testProps.setProperty("security.argon2.memory", "abc");
+		testProps.setProperty("security.argon2.iterations", "-1");
+		org.openmrs.api.context.Context.setRuntimeProperties(testProps);
 		try {
 			Security.resetEncoder();
 			String hash = Security.encodeString("test");
@@ -93,25 +88,22 @@ public class SecurityTest {
 			assertTrue(params.contains("p=1"));
 		}
 		finally {
-			serviceContext.setService(org.openmrs.api.AdministrationService.class, originalAdministrationService);
+			org.openmrs.api.context.Context.setRuntimeProperties(originalProps);
 			Security.resetEncoder();
 		}
 	}
 
 	@Test
-	public void encodeString_shouldUseUpdatedGlobalPropertyValues() throws Exception {
-		org.openmrs.api.AdministrationService adminService = org.mockito.Mockito.mock(org.openmrs.api.AdministrationService.class);
-		org.mockito.Mockito.when(adminService.getGlobalProperty(OpenmrsConstants.GP_ARGON2_SALT_LENGTH, "16")).thenReturn("16");
-		org.mockito.Mockito.when(adminService.getGlobalProperty(OpenmrsConstants.GP_ARGON2_HASH_LENGTH, "32")).thenReturn("32");
-		org.mockito.Mockito.when(adminService.getGlobalProperty(OpenmrsConstants.GP_ARGON2_PARALLELISM, "1")).thenReturn("1");
-		org.mockito.Mockito.when(adminService.getGlobalProperty(OpenmrsConstants.GP_ARGON2_MEMORY, "65536")).thenReturn("65536");
-		org.mockito.Mockito.when(adminService.getGlobalProperty(OpenmrsConstants.GP_ARGON2_ITERATIONS, "3")).thenReturn("3");
-
-		java.lang.reflect.Method getServiceContextMethod = org.openmrs.api.context.Context.class.getDeclaredMethod("getServiceContext");
-		getServiceContextMethod.setAccessible(true);
-		org.openmrs.api.context.ServiceContext serviceContext = (org.openmrs.api.context.ServiceContext) getServiceContextMethod.invoke(null);
-		org.openmrs.api.AdministrationService originalAdministrationService = serviceContext.getAdministrationService();
-		serviceContext.setService(org.openmrs.api.AdministrationService.class, adminService);
+	public void encodeString_shouldUseUpdatedRuntimePropertyValues() throws Exception {
+		java.util.Properties originalProps = org.openmrs.api.context.Context.getRuntimeProperties();
+		java.util.Properties testProps = new java.util.Properties();
+		testProps.putAll(originalProps);
+		testProps.setProperty("security.argon2.saltLength", "16");
+		testProps.setProperty("security.argon2.hashLength", "32");
+		testProps.setProperty("security.argon2.parallelism", "1");
+		testProps.setProperty("security.argon2.memory", "65536");
+		testProps.setProperty("security.argon2.iterations", "3");
+		org.openmrs.api.context.Context.setRuntimeProperties(testProps);
 		try {
 			Security.resetEncoder();
 			String hash1 = Security.encodeString("test");
@@ -121,9 +113,10 @@ public class SecurityTest {
 			assertTrue(parts1[3].contains("t=3"));
 			assertTrue(parts1[3].contains("p=1"));
 
-			org.mockito.Mockito.when(adminService.getGlobalProperty(OpenmrsConstants.GP_ARGON2_MEMORY, "65536")).thenReturn("131072");
-			org.mockito.Mockito.when(adminService.getGlobalProperty(OpenmrsConstants.GP_ARGON2_ITERATIONS, "3")).thenReturn("4");
-			org.mockito.Mockito.when(adminService.getGlobalProperty(OpenmrsConstants.GP_ARGON2_PARALLELISM, "1")).thenReturn("2");
+			testProps.setProperty("security.argon2.memory", "131072");
+			testProps.setProperty("security.argon2.iterations", "4");
+			testProps.setProperty("security.argon2.parallelism", "2");
+			org.openmrs.api.context.Context.setRuntimeProperties(testProps);
 
 			String hash2 = Security.encodeString("test");
 			String[] parts2 = hash2.split("\\$");
@@ -133,7 +126,7 @@ public class SecurityTest {
 			assertTrue(parts2[3].contains("p=2"));
 		}
 		finally {
-			serviceContext.setService(org.openmrs.api.AdministrationService.class, originalAdministrationService);
+			org.openmrs.api.context.Context.setRuntimeProperties(originalProps);
 			Security.resetEncoder();
 		}
 	}

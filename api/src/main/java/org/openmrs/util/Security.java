@@ -15,6 +15,7 @@ import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.security.SecureRandom;
 import java.util.Base64;
+import java.util.Properties;
 import java.util.Random;
 
 import javax.crypto.Cipher;
@@ -24,7 +25,6 @@ import javax.crypto.spec.IvParameterSpec;
 import javax.crypto.spec.SecretKeySpec;
 
 import org.openmrs.api.APIException;
-import org.openmrs.api.AdministrationService;
 import org.openmrs.api.context.Context;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -110,17 +110,23 @@ public class Security {
 	private static volatile Argon2PasswordEncoder argon2Encoder;
 	private static volatile String configFingerprint;
 
+	private static final String RUNTIME_PROPERTY_ARGON2_SALT_LENGTH = "security.argon2.saltLength";
+	private static final String RUNTIME_PROPERTY_ARGON2_HASH_LENGTH = "security.argon2.hashLength";
+	private static final String RUNTIME_PROPERTY_ARGON2_PARALLELISM = "security.argon2.parallelism";
+	private static final String RUNTIME_PROPERTY_ARGON2_MEMORY = "security.argon2.memory";
+	private static final String RUNTIME_PROPERTY_ARGON2_ITERATIONS = "security.argon2.iterations";
+
 	private static Argon2PasswordEncoder getArgon2Encoder() {
 		String currentFingerprint = getConfigFingerprint();
 		if (argon2Encoder == null || !currentFingerprint.equals(configFingerprint)) {
 			synchronized (Security.class) {
 				if (argon2Encoder == null || !currentFingerprint.equals(configFingerprint)) {
 					argon2Encoder = new Argon2PasswordEncoder(
-						getIntProperty(OpenmrsConstants.GP_ARGON2_SALT_LENGTH, 16),
-						getIntProperty(OpenmrsConstants.GP_ARGON2_HASH_LENGTH, 32),
-						getIntProperty(OpenmrsConstants.GP_ARGON2_PARALLELISM, 1),
-						getIntProperty(OpenmrsConstants.GP_ARGON2_MEMORY, 65536),
-						getIntProperty(OpenmrsConstants.GP_ARGON2_ITERATIONS, 3)
+						getRuntimeIntProperty(RUNTIME_PROPERTY_ARGON2_SALT_LENGTH, 16),
+						getRuntimeIntProperty(RUNTIME_PROPERTY_ARGON2_HASH_LENGTH, 32),
+						getRuntimeIntProperty(RUNTIME_PROPERTY_ARGON2_PARALLELISM, 1),
+						getRuntimeIntProperty(RUNTIME_PROPERTY_ARGON2_MEMORY, 65536),
+						getRuntimeIntProperty(RUNTIME_PROPERTY_ARGON2_ITERATIONS, 3)
 					);
 					configFingerprint = currentFingerprint;
 				}
@@ -144,36 +150,34 @@ public class Security {
 
 	private static String getConfigFingerprint() {
 		try {
-			AdministrationService adminService = Context.getAdministrationService();
-			return OpenmrsConstants.GP_ARGON2_SALT_LENGTH + "="
-				+ adminService.getGlobalProperty(OpenmrsConstants.GP_ARGON2_SALT_LENGTH, "16") + "|"
-				+ OpenmrsConstants.GP_ARGON2_HASH_LENGTH + "="
-				+ adminService.getGlobalProperty(OpenmrsConstants.GP_ARGON2_HASH_LENGTH, "32") + "|"
-				+ OpenmrsConstants.GP_ARGON2_PARALLELISM + "="
-				+ adminService.getGlobalProperty(OpenmrsConstants.GP_ARGON2_PARALLELISM, "1") + "|"
-				+ OpenmrsConstants.GP_ARGON2_MEMORY + "="
-				+ adminService.getGlobalProperty(OpenmrsConstants.GP_ARGON2_MEMORY, "65536") + "|"
-				+ OpenmrsConstants.GP_ARGON2_ITERATIONS + "="
-				+ adminService.getGlobalProperty(OpenmrsConstants.GP_ARGON2_ITERATIONS, "3");
-		} catch ( APIException e) {
+			Properties runtimeProps = Context.getRuntimeProperties();
+			return RUNTIME_PROPERTY_ARGON2_SALT_LENGTH + "="
+				+ runtimeProps.getProperty(RUNTIME_PROPERTY_ARGON2_SALT_LENGTH, "16") + "|"
+				+ RUNTIME_PROPERTY_ARGON2_HASH_LENGTH + "="
+				+ runtimeProps.getProperty(RUNTIME_PROPERTY_ARGON2_HASH_LENGTH, "32") + "|"
+				+ RUNTIME_PROPERTY_ARGON2_PARALLELISM + "="
+				+ runtimeProps.getProperty(RUNTIME_PROPERTY_ARGON2_PARALLELISM, "1") + "|"
+				+ RUNTIME_PROPERTY_ARGON2_MEMORY + "="
+				+ runtimeProps.getProperty(RUNTIME_PROPERTY_ARGON2_MEMORY, "65536") + "|"
+				+ RUNTIME_PROPERTY_ARGON2_ITERATIONS + "="
+				+ runtimeProps.getProperty(RUNTIME_PROPERTY_ARGON2_ITERATIONS, "3");
+		} catch (Exception e) {
 			return "default";
 		}
 	}
 
-	private static int getIntProperty(String key, int defaultValue) {
+	private static int getRuntimeIntProperty(String key, int defaultValue) {
 		try {
-			AdministrationService adminService = Context.getAdministrationService();
-			String value = adminService.getGlobalProperty(key, String.valueOf(defaultValue));
+			Properties runtimeProps = Context.getRuntimeProperties();
+			String value = runtimeProps.getProperty(key, String.valueOf(defaultValue));
 			int parsed = Integer.parseInt(value.trim());
 			if (parsed <= 0) {
-				log.warn("Invalid value for global property '{}': {}, must be > 0, using default: {}", key, parsed, defaultValue);
+				log.warn("Invalid value for runtime property '{}': {}, must be > 0, using default: {}", key, parsed, defaultValue);
 				return defaultValue;
 			}
 			return parsed;
-		} catch (APIException e) {
-			return defaultValue;
 		} catch (Exception e) {
-			log.warn("Invalid value for global property '{}', using default: {}", key, defaultValue);
+			log.warn("Invalid value for runtime property '{}', using default: {}", key, defaultValue);
 			return defaultValue;
 		}
 	}
