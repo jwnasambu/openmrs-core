@@ -22,7 +22,7 @@ import org.springframework.security.crypto.password.PasswordEncoder;
  * form is a convention internal to this class and {@link Security}, which splits it back into the
  * two columns; it is never itself stored.
  *
- * @since 2.8.9
+ * @since 2.8.10
  */
 public class LegacyOpenmrsPasswordEncoder implements PasswordEncoder {
 
