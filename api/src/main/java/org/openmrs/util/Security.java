@@ -65,40 +65,26 @@ public class Security {
 	}
 
 	/**
-	 * Encodes a password with the {@link LegacyOpenmrsPasswordEncoder} and splits the result into the
-	 * two columns OpenMRS stores it in ({@code hash:salt}). The encode step cannot go through the
-	 * configured {@code openmrsPasswordEncoder} because that is a {@link DelegatingPasswordEncoder}
-	 * and prefixes its output with the encoder id (e.g. {@code {legacy}}), which does not fit the
-	 * 128-character {@code users.password} column alongside the 128-character SHA-512 hash. The bare
+	 * Encodes a security-sensitive string (a password, secret answer, or any other credential) with
+	 * the {@link LegacyOpenmrsPasswordEncoder} and splits the result into the two columns OpenMRS
+	 * stores such values in ({@code hash:salt}). The encode step cannot go through the configured
+	 * {@code openmrsPasswordEncoder} because that is a {@link DelegatingPasswordEncoder} and prefixes
+	 * its output with the encoder id (e.g. {@code {legacy}}), which does not fit the 128-character
+	 * {@code users.password} column alongside the 128-character SHA-512 hash. The bare
 	 * {@code hash:salt} values written here are matched by {@link #checkPassword(String, String, String)},
 	 * whose configured encoder falls back to the {@link LegacyOpenmrsPasswordEncoder} for values with
 	 * no {@code {id}} prefix.
 	 *
-	 * @param rawPassword the cleartext password
-	 * @return String[] where [0] is the hashed password and [1] is the salt
+	 * @param strToEncode the cleartext string to encode
+	 * @param salt the salt to hash with, or null/empty to generate a fresh one
+	 * @return String[] where [0] is the hashed value and [1] is the salt
 	 * @since 2.9.0, 3.0.0
 	 */
-	public static String[] encodePassword(String rawPassword) {
-		String encoded = new LegacyOpenmrsPasswordEncoder().encode(rawPassword);
-		return parseEncodedPassword(encoded);
-	}
-
-	/**
-	 * Encodes a password using a specific salt instead of generating a new one.
-	 * Used for password changes where the existing salt must be preserved
-	 * (e.g., to keep secret-answer hashes valid).
-	 *
-	 * @param rawPassword the cleartext password
-	 * @param salt the salt to use
-	 * @return String[] where [0] is the hashed password and [1] is the salt
-	 * @since 2.9.0, 3.0.0
-	 */
-	public static String[] encodePasswordWithSalt(String rawPassword, String salt) {
+	public static String[] encodeStringWithSalt(String strToEncode, String salt) {
 		if (salt == null || salt.isEmpty()) {
-			return encodePassword(rawPassword);
+			return parseEncodedPassword(new LegacyOpenmrsPasswordEncoder().encode(strToEncode));
 		}
-		String encoded = new LegacyOpenmrsPasswordEncoder().encodeWithSalt(rawPassword, salt);
-		return parseEncodedPassword(encoded);
+		return parseEncodedPassword(new LegacyOpenmrsPasswordEncoder().encodeWithSalt(strToEncode, salt));
 	}
 
 	/**

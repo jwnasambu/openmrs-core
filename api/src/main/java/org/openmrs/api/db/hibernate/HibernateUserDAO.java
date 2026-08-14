@@ -101,7 +101,7 @@ public class HibernateUserDAO implements UserDAO {
 			*/
 			sessionFactory.getCurrentSession().flush();
 			
-			String[] encoded = Security.encodePassword(password);
+			String[] encoded = Security.encodeStringWithSalt(password, null);
 			updateUserPassword(encoded[0], encoded[1], Context.getAuthenticatedUser().getUserId(), new Date(), user
 			        .getUserId());
 		}
@@ -333,7 +333,7 @@ public class HibernateUserDAO implements UserDAO {
 	 */
 	private String[] encodeWithReusedSalt(String rawPassword, String existingSalt) {
 		String salt = StringUtils.isEmpty(existingSalt) ? Security.getRandomToken() : existingSalt;
-		return Security.encodePasswordWithSalt(rawPassword, salt);
+		return Security.encodeStringWithSalt(rawPassword, salt);
 	}
 
 	/**

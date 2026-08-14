@@ -96,12 +96,12 @@ public class OpenmrsObjectSaveHandlerTest {
 	public void handle_shouldSetTheUuidIfItIsNull() {
 		Role role = new Role();
 		role.setUuid(null);
-	
+
 		new OpenmrsObjectSaveHandler().handle(role, null, null, null);
-	
+
 		assertNotNull(role.getUuid());
 	}
-	
+
 	/**
 	 * A uuid supplied by the caller identifies the object elsewhere, so saving must not replace it.
 	 *
@@ -111,12 +111,12 @@ public class OpenmrsObjectSaveHandlerTest {
 	public void handle_shouldNotOverwriteAnExistingUuid() {
 		Role role = new Role();
 		String uuid = role.getUuid();
-	
+
 		new OpenmrsObjectSaveHandler().handle(role, null, null, null);
-	
+
 		assertEquals(uuid, role.getUuid());
 	}
-	
+
 	public class SomeClass extends BaseOpenmrsObject {
 		
 		private Integer id;
