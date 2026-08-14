@@ -32,11 +32,10 @@
 	<bean class="org.openmrs.api.impl.GlobalLocaleList" id="globalLocaleList"/>
 
 	<!--
-		openmrsPasswordEncoder is a DelegatingPasswordEncoder whose defaultPasswordEncoderForMatches
-		is the LegacyOpenmrsPasswordEncoder. Existing rows store their hash and salt as bare
-		"hash:salt" values with no {id} prefix, and the default encoder is what receives those
-		un-prefixed values during matches(); a custom UnmappedIdPasswordEncoder would throw instead.
-		Any future encoder gets registered here under its own id.
+		openmrsPasswordEncoder is a DelegatingPasswordEncoder. Security#getPasswordEncoder() sets its
+		defaultPasswordEncoderForMatches to a default encoder that falls back to the
+		LegacyOpenmrsPasswordEncoder, which is what matches the bare "hash:salt" values with no {id}
+		prefix that existing rows store. Any future encoder gets registered here under its own id.
 	-->
 	<bean id="openmrsPasswordEncoder" class="org.springframework.security.crypto.password.DelegatingPasswordEncoder">
 		<constructor-arg index="0" value="legacy"/>
@@ -47,9 +46,6 @@
 				</entry>
 			</map>
 		</constructor-arg>
-		<property name="defaultPasswordEncoderForMatches">
-			<bean class="org.openmrs.util.LegacyOpenmrsPasswordEncoder"/>
-		</property>
 	</bean>
 
 	<!--  **************************  EVENT LISTENERS ***************************** -->

@@ -28,6 +28,7 @@ import org.openmrs.api.context.Context;
 import org.openmrs.api.context.ServiceContext;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.security.crypto.password.DelegatingPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.util.StringUtils;
 
@@ -43,6 +44,8 @@ public class Security {
 	
 	private static final Random RANDOM = new SecureRandom();
 
+	private static final PasswordEncoder DEFAULT_PASSWORD_ENCODER_FOR_MATCHES = new DefaultPasswordEncoderForMatches();
+
 	private Security() {
 	}
 
@@ -50,7 +53,129 @@ public class Security {
 		if (ServiceContext.getInstance().getApplicationContext() == null) {
 			throw new APIException("spring.context.not.initialized", (Object[]) null);
 		}
-		return Context.getRegisteredComponent("openmrsPasswordEncoder", PasswordEncoder.class);
+		PasswordEncoder passwordEncoder = Context.getRegisteredComponent("openmrsPasswordEncoder", PasswordEncoder.class);
+		if (passwordEncoder instanceof DelegatingPasswordEncoder) {
+			// Existing rows store their hash and salt as bare "hash:salt" values with no {id} prefix,
+			// so the encoder used for unmatched ids must try the LegacyOpenmrsPasswordEncoder instead
+			// of throwing like the stock UnmappedIdPasswordEncoder would.
+			((DelegatingPasswordEncoder) passwordEncoder)
+			        .setDefaultPasswordEncoderForMatches(DEFAULT_PASSWORD_ENCODER_FOR_MATCHES);
+		}
+		return passwordEncoder;
+	}
+
+	/**
+	 * Encodes a password with the {@link LegacyOpenmrsPasswordEncoder} and splits the result into the
+	 * two columns OpenMRS stores it in ({@code hash:salt}). The encode step cannot go through the
+	 * configured {@code openmrsPasswordEncoder} because that is a {@link DelegatingPasswordEncoder}
+	 * and prefixes its output with the encoder id (e.g. {@code {legacy}}), which does not fit the
+	 * 128-character {@code users.password} column alongside the 128-character SHA-512 hash. The bare
+	 * {@code hash:salt} values written here are matched by {@link #checkPassword(String, String, String)},
+	 * whose configured encoder falls back to the {@link LegacyOpenmrsPasswordEncoder} for values with
+	 * no {@code {id}} prefix.
+	 *
+	 * @param rawPassword the cleartext password
+	 * @return String[] where [0] is the hashed password and [1] is the salt
+	 * @since 2.9.0, 3.0.0
+	 */
+	public static String[] encodePassword(String rawPassword) {
+		String encoded = new LegacyOpenmrsPasswordEncoder().encode(rawPassword);
+		return parseEncodedPassword(encoded);
+	}
+
+	/**
+	 * Encodes a password using a specific salt instead of generating a new one.
+	 * Used for password changes where the existing salt must be preserved
+	 * (e.g., to keep secret-answer hashes valid).
+	 *
+	 * @param rawPassword the cleartext password
+	 * @param salt the salt to use
+	 * @return String[] where [0] is the hashed password and [1] is the salt
+	 * @since 2.9.0, 3.0.0
+	 */
+	public static String[] encodePasswordWithSalt(String rawPassword, String salt) {
+		if (salt == null || salt.isEmpty()) {
+			return encodePassword(rawPassword);
+		}
+		String encoded = new LegacyOpenmrsPasswordEncoder().encodeWithSalt(rawPassword, salt);
+		return parseEncodedPassword(encoded);
+	}
+
+	/**
+	 * Splits a colon-delimited {@code hash:salt} string into its components.
+	 *
+	 * @param encodedPassword the encoded password string
+	 * @return String[] where [0] is the hash and [1] is the salt (empty string if absent)
+	 */
+	private static String[] parseEncodedPassword(String encodedPassword) {
+		if (encodedPassword == null) {
+			return new String[] { "", "" };
+		}
+		String[] parts = encodedPassword.split(":", 2);
+		return new String[] { parts[0], parts.length > 1 ? parts[1] : "" };
+	}
+
+	/**
+	 * Checks a raw password against a stored hash and salt using the configured PasswordEncoder.
+	 *
+	 * @param rawPassword the cleartext password
+	 * @param storedHash the stored hashed password
+	 * @param storedSalt the stored salt
+	 * @return true if the password matches
+	 * @since 2.9.0, 3.0.0
+	 */
+	public static boolean checkPassword(String rawPassword, String storedHash, String storedSalt) {
+		if (rawPassword == null || storedHash == null) {
+			return false;
+		}
+		String encodedPassword = storedSalt != null && !storedSalt.isEmpty()
+			? storedHash + ":" + storedSalt
+			: storedHash;
+		return getPasswordEncoder().matches(rawPassword, encodedPassword);
+	}
+
+	/**
+	 * Default {@link PasswordEncoder} that a {@link DelegatingPasswordEncoder} uses when the id of
+	 * the encoded password is not mapped to a registered encoder. An unknown id is rejected with the
+	 * same exception the stock {@code UnmappedIdPasswordEncoder} throws; a value with no id prefix at
+	 * all is one of OpenMRS's historical bare {@code hash:salt} digests, so those fall back to the
+	 * {@link LegacyOpenmrsPasswordEncoder}.
+	 */
+	private static class DefaultPasswordEncoderForMatches implements PasswordEncoder {
+
+		private static final PasswordEncoder LEGACY_PASSWORD_ENCODER = new LegacyOpenmrsPasswordEncoder();
+
+		@Override
+		public String encode(CharSequence rawPassword) {
+			throw new UnsupportedOperationException("encode is not supported");
+		}
+
+		@Override
+		public boolean matches(CharSequence rawPassword, String prefixEncodedPassword) {
+			String id = extractId(prefixEncodedPassword);
+			if (id != null && !id.isEmpty()) {
+				throw new IllegalArgumentException(String.format(DelegatingPasswordEncoder.NO_PASSWORD_ENCODER_MAPPED, id));
+			}
+			return LEGACY_PASSWORD_ENCODER.matches(rawPassword, prefixEncodedPassword);
+		}
+
+		/**
+		 * Extracts the {@code {id}} prefix of an encoded password, or null when there is none.
+		 */
+		private String extractId(String prefixEncodedPassword) {
+			if (prefixEncodedPassword == null) {
+				return null;
+			}
+			int start = prefixEncodedPassword.indexOf('{');
+			if (start != 0) {
+				return null;
+			}
+			int end = prefixEncodedPassword.indexOf('}', start);
+			if (end < 0) {
+				return null;
+			}
+			return prefixEncodedPassword.substring(start + 1, end);
+		}
 	}
 
 	/**
@@ -93,7 +218,7 @@ public class Security {
 		if (hashedPassword == null || passwordToHash == null) {
 			return false;
 		}
-		
+
 		return hashedPassword.equals(encodeString(passwordToHash))
 			|| hashedPassword.equals(encodeStringSHA1(passwordToHash))
 			|| hashedPassword.equals(incorrectlyEncodeString(passwordToHash));

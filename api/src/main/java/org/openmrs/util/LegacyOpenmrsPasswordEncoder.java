@@ -25,12 +25,28 @@ import org.springframework.security.crypto.password.PasswordEncoder;
  * @since 2.9.0, 3.0.0
  */
 public class LegacyOpenmrsPasswordEncoder implements PasswordEncoder {
-	
+
 	@Override
 	public String encode(CharSequence rawPassword) {
 		return hashAndFormat(rawPassword, Security.getRandomToken());
 	}
-	
+
+	/**
+	 * Encodes a password using a specific salt instead of generating a new one.
+	 * Used for password changes where the existing salt must be preserved
+	 * (e.g., to keep secret-answer hashes valid).
+	 *
+	 * @param rawPassword the password to encode
+	 * @param salt the salt to use (must not be null or empty)
+	 * @return the encoded password as {@code hash:salt}
+	 */
+	String encodeWithSalt(CharSequence rawPassword, String salt) {
+		if (salt == null || salt.isEmpty()) {
+			throw new IllegalArgumentException("Salt must not be null or empty");
+		}
+		return hashAndFormat(rawPassword, salt);
+	}
+
 	@Override
 	public boolean matches(CharSequence rawPassword, String encodedPassword) {
 		if (encodedPassword == null || rawPassword == null) {
@@ -39,7 +55,7 @@ public class LegacyOpenmrsPasswordEncoder implements PasswordEncoder {
 		String[] parts = splitHashAndSalt(encodedPassword);
 		return Security.hashMatchesLegacy(parts[0], rawPassword.toString() + parts[1]);
 	}
-	
+
 	/**
 	 * Splits a stored {@code hash:salt} value into its two parts. A hash with no salt part yields
 	 * an empty salt.
@@ -51,7 +67,7 @@ public class LegacyOpenmrsPasswordEncoder implements PasswordEncoder {
 		String[] parts = encodedPassword.split(":", 2);
 		return new String[] { parts[0], parts.length > 1 ? parts[1] : "" };
 	}
-	
+
 	/**
 	 * Computes the SHA-512 sum of {@code rawPassword + salt} and returns it joined with the salt as
 	 * {@code hash:salt}.
