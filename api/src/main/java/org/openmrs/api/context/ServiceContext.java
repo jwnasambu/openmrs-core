@@ -81,26 +81,26 @@ public class ServiceContext implements ApplicationContextAware {
 	private static final Logger log = LoggerFactory.getLogger(ServiceContext.class);
 
 	private ApplicationContext applicationContext;
-	
+
 	private static volatile boolean refreshingContext = false;
-	
+
 	private static final Object refreshingContextLock = new Object();
-	
+
 	/**
 	 * Static variable holding whether or not to use the system classloader. By default this is
 	 * false so the openmrs classloader is used instead
 	 */
 	private boolean useSystemClassLoader = false;
-	
+
 	// Cached service objects
 	Map<Class, Object> services = new ConcurrentHashMap<>();
-	
+
 	// Advisors added to services by this service
 	Map<Class, Set<Advisor>> addedAdvisors = new HashMap<>();
-	
+
 	// Advice added to services by this service
 	Map<Class, Set<Advice>> addedAdvice = new HashMap<>();
-	
+
 	/**
 	 * Services implementing the OpenmrsService interface for each module. The map is keyed by the
 	 * full class name including package.
@@ -138,10 +138,10 @@ public class ServiceContext implements ApplicationContextAware {
 		if (ServiceContextHolder.instance == null) {
 			ServiceContextHolder.instance = new ServiceContext();
 		}
-		
+
 		return ServiceContextHolder.instance;
 	}
-	
+
 	/**
 	 * Reports whether the singleton {@link ServiceContext} has already been created, without triggering
 	 * its creation the way {@link #getInstance()} would.
@@ -684,7 +684,7 @@ public class ServiceContext implements ApplicationContextAware {
 		if (log.isTraceEnabled()) {
 			log.trace("Getting service: " + cls);
 		}
-		
+
 		// Only synchronize if we're refreshing the context; during context refreshes, we need
 		// to wait for services to be available. Otherwise we can take the fast-path.
 		if (refreshingContext) {
@@ -879,7 +879,7 @@ public class ServiceContext implements ApplicationContextAware {
 	public boolean isRefreshingContext() {
 		return refreshingContext;
 	}
-	
+
 	/**
 	 * Retrieves all Beans which have been registered in the Spring {@link ApplicationContext} that
 	 * match the given object type (including subclasses).
@@ -912,6 +912,9 @@ public class ServiceContext implements ApplicationContextAware {
 	 * @since 1.9.4
 	 */
 	public <T> T getRegisteredComponent(String beanName, Class<T> type) throws APIException {
+		if (applicationContext == null) {
+			throw new APIException("context.is.null");
+		}
 		try {
 			return applicationContext.getBean(beanName, type);
 		}
@@ -971,7 +974,7 @@ public class ServiceContext implements ApplicationContextAware {
 						log.debug("Finished waiting to get service {} while the context was being refreshed", classString);
 					}
 				}
-	
+
 				Daemon.runStartupForService(openmrsService, Daemon.callerKey());
 			}
 				catch (InterruptedException e) {

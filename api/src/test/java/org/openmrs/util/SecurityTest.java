@@ -10,21 +10,23 @@
 package org.openmrs.util;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.Base64;
 import java.util.Base64.Decoder;
 
 import org.junit.jupiter.api.Test;
+import org.openmrs.test.jupiter.BaseContextSensitiveTest;
 import org.springframework.util.StringUtils;
 
 /**
  * Tests the methods on the {@link Security} class
  */
-public class SecurityTest {
-	
+public class SecurityTest extends BaseContextSensitiveTest {
+
 	private static final int HASH_LENGTH = 128;
-	
+
 	/**
 	 * @see Security#encodeString(String)
 	 */
@@ -70,6 +72,36 @@ public class SecurityTest {
 	public void hashMatches_shouldMatchStringsHashedWithIncorrectSha1Algorithm() {
 		assertTrue(Security.hashMatches("4a1750c8607dfa237de36c6305715c223415189", "test"
 		        + "c788c6ad82a157b712392ca695dfcf2eed193d7f"));
+	}
+
+	/**
+	 * @see Security#encodePassword(String)
+	 */
+	@Test
+	public void encodePassword_shouldReturnACompleteEncodedValueWithTheEncoderIdPrefix() {
+		String encoded = Security.encodePassword("testPassword");
+		assertTrue(encoded.startsWith("{legacy}"));
+	}
+
+	/**
+	 * @see Security#encodePassword(String)
+	 * @see Security#checkPassword(String,String,String)
+	 */
+	@Test
+	public void checkPassword_shouldMatchPasswordsEncodedTogetherWithTheirSalt() {
+		String salt = Security.getRandomToken();
+		String encoded = Security.encodePassword("testPassword" + salt);
+		assertTrue(Security.checkPassword("testPassword", encoded, salt));
+		assertFalse(Security.checkPassword("wrongPassword", encoded, salt));
+	}
+
+	/**
+	 * @see Security#checkPassword(String,String,String)
+	 */
+	@Test
+	public void checkPassword_shouldReturnFalseForNullPasswordOrStoredValue() {
+		assertFalse(Security.checkPassword("anyPassword", null, ""));
+		assertFalse(Security.checkPassword(null, "storedValue", ""));
 	}
 
 	/**

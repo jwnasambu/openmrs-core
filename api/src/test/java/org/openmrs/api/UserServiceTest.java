@@ -1794,8 +1794,9 @@ public class UserServiceTest extends BaseContextSensitiveTest {
 	 */
 	@Test
 	public void checkPassword_shouldReturnFalseWhenRawPasswordIsNull() {
-		String[] encoded = Security.encodeStringWithSalt("testPassword", null);
-		assertFalse(Security.checkPassword(null, encoded[0], encoded[1]));
+		String salt = Security.getRandomToken();
+		String encoded = Security.encodePassword("testPassword" + salt);
+		assertFalse(Security.checkPassword(null, encoded, salt));
 	}
 
 	private Credentials getTestUserCredentials() {

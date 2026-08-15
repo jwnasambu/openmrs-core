@@ -25,10 +25,8 @@ import javax.crypto.spec.SecretKeySpec;
 
 import org.openmrs.api.APIException;
 import org.openmrs.api.context.Context;
-import org.openmrs.api.context.ServiceContext;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.security.crypto.password.DelegatingPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.util.StringUtils;
 
@@ -41,135 +39,61 @@ public class Security {
 	 * encryption settings
 	 */
 	private static final Logger log = LoggerFactory.getLogger(Security.class);
-	
-	private static final Random RANDOM = new SecureRandom();
 
-	private static final PasswordEncoder DEFAULT_PASSWORD_ENCODER_FOR_MATCHES = new DefaultPasswordEncoderForMatches();
+	private static final Random RANDOM = new SecureRandom();
 
 	private Security() {
 	}
 
 	private static PasswordEncoder getPasswordEncoder() {
-		if (ServiceContext.getInstance().getApplicationContext() == null) {
-			throw new APIException("spring.context.not.initialized", (Object[]) null);
-		}
-		PasswordEncoder passwordEncoder = Context.getRegisteredComponent("openmrsPasswordEncoder", PasswordEncoder.class);
-		if (passwordEncoder instanceof DelegatingPasswordEncoder) {
-			// Existing rows store their hash and salt as bare "hash:salt" values with no {id} prefix,
-			// so the encoder used for unmatched ids must try the LegacyOpenmrsPasswordEncoder instead
-			// of throwing like the stock UnmappedIdPasswordEncoder would.
-			((DelegatingPasswordEncoder) passwordEncoder)
-			        .setDefaultPasswordEncoderForMatches(DEFAULT_PASSWORD_ENCODER_FOR_MATCHES);
-		}
-		return passwordEncoder;
+		return Context.getRegisteredComponent("openmrsPasswordEncoder", PasswordEncoder.class);
 	}
 
 	/**
-	 * Encodes a security-sensitive string (a password, secret answer, or any other credential) with
-	 * the {@link LegacyOpenmrsPasswordEncoder} and splits the result into the two columns OpenMRS
-	 * stores such values in ({@code hash:salt}). The encode step cannot go through the configured
-	 * {@code openmrsPasswordEncoder} because that is a {@link DelegatingPasswordEncoder} and prefixes
-	 * its output with the encoder id (e.g. {@code {legacy}}), which does not fit the 128-character
-	 * {@code users.password} column alongside the 128-character SHA-512 hash. The bare
-	 * {@code hash:salt} values written here are matched by {@link #checkPassword(String, String, String)},
-	 * whose configured encoder falls back to the {@link LegacyOpenmrsPasswordEncoder} for values with
-	 * no {@code {id}} prefix.
+	 * Encodes a security-sensitive string (a password, secret answer, or any other credential)
+	 * using the configured {@code openmrsPasswordEncoder} and returns the full encoded value to
+	 * persist (e.g. {@code {legacy}hash:salt}). The caller passes the salt as part of the string
+	 * to encode (historically OpenMRS hashes {@code secret + salt}); this method never parses the
+	 * encoded value back into a hash and a salt, and never returns a salt. The full value returned
+	 * here is what should be stored in the database, so the exact same call works regardless of the
+	 * password encoder configured.
 	 *
-	 * @param strToEncode the cleartext string to encode
-	 * @param salt the salt to hash with, or null/empty to generate a fresh one
-	 * @return String[] where [0] is the hashed value and [1] is the salt
+	 * @param strToEncode the cleartext string to encode (for passwords, {@code password + salt})
+	 * @return the encoded value to store
 	 * @since 2.9.0, 3.0.0
 	 */
-	public static String[] encodeStringWithSalt(String strToEncode, String salt) {
-		if (salt == null || salt.isEmpty()) {
-			return parseEncodedPassword(new LegacyOpenmrsPasswordEncoder().encode(strToEncode));
-		}
-		return parseEncodedPassword(new LegacyOpenmrsPasswordEncoder().encodeWithSalt(strToEncode, salt));
+	public static String encodePassword(String strToEncode) {
+		return getPasswordEncoder().encode(strToEncode);
 	}
 
 	/**
-	 * Splits a colon-delimited {@code hash:salt} string into its components.
-	 *
-	 * @param encodedPassword the encoded password string
-	 * @return String[] where [0] is the hash and [1] is the salt (empty string if absent)
-	 */
-	private static String[] parseEncodedPassword(String encodedPassword) {
-		if (encodedPassword == null) {
-			return new String[] { "", "" };
-		}
-		String[] parts = encodedPassword.split(":", 2);
-		return new String[] { parts[0], parts.length > 1 ? parts[1] : "" };
-	}
-
-	/**
-	 * Checks a raw password against a stored hash and salt using the configured PasswordEncoder.
+	 * Checks a raw password against a stored encoded password and the salt it was encoded with,
+	 * using the configured PasswordEncoder. The raw password is combined with the stored salt
+	 * ({@code rawPassword + salt}) before being matched, so callers must supply both values. The
+	 * stored value is the full string produced by {@link #encodePassword(String)}; values written
+	 * by older OpenMRS versions (a bare SHA digest in the password column) still match, because
+	 * the configured encoder falls back to the legacy comparisons.
 	 *
 	 * @param rawPassword the cleartext password
-	 * @param storedHash the stored hashed password
+	 * @param storedEncodedPassword the stored encoded password
 	 * @param storedSalt the stored salt
 	 * @return true if the password matches
 	 * @since 2.9.0, 3.0.0
 	 */
-	public static boolean checkPassword(String rawPassword, String storedHash, String storedSalt) {
-		if (rawPassword == null || storedHash == null) {
+	public static boolean checkPassword(String rawPassword, String storedEncodedPassword, String storedSalt) {
+		if (rawPassword == null || storedEncodedPassword == null) {
 			return false;
 		}
-		String encodedPassword = storedSalt != null && !storedSalt.isEmpty()
-			? storedHash + ":" + storedSalt
-			: storedHash;
-		return getPasswordEncoder().matches(rawPassword, encodedPassword);
-	}
-
-	/**
-	 * Default {@link PasswordEncoder} that a {@link DelegatingPasswordEncoder} uses when the id of
-	 * the encoded password is not mapped to a registered encoder. An unknown id is rejected with the
-	 * same exception the stock {@code UnmappedIdPasswordEncoder} throws; a value with no id prefix at
-	 * all is one of OpenMRS's historical bare {@code hash:salt} digests, so those fall back to the
-	 * {@link LegacyOpenmrsPasswordEncoder}.
-	 */
-	private static class DefaultPasswordEncoderForMatches implements PasswordEncoder {
-
-		private static final PasswordEncoder LEGACY_PASSWORD_ENCODER = new LegacyOpenmrsPasswordEncoder();
-
-		@Override
-		public String encode(CharSequence rawPassword) {
-			throw new UnsupportedOperationException("encode is not supported");
-		}
-
-		@Override
-		public boolean matches(CharSequence rawPassword, String prefixEncodedPassword) {
-			String id = extractId(prefixEncodedPassword);
-			if (id != null && !id.isEmpty()) {
-				throw new IllegalArgumentException(String.format(DelegatingPasswordEncoder.NO_PASSWORD_ENCODER_MAPPED, id));
-			}
-			return LEGACY_PASSWORD_ENCODER.matches(rawPassword, prefixEncodedPassword);
-		}
-
-		/**
-		 * Extracts the {@code {id}} prefix of an encoded password, or null when there is none.
-		 */
-		private String extractId(String prefixEncodedPassword) {
-			if (prefixEncodedPassword == null) {
-				return null;
-			}
-			int start = prefixEncodedPassword.indexOf('{');
-			if (start != 0) {
-				return null;
-			}
-			int end = prefixEncodedPassword.indexOf('}', start);
-			if (end < 0) {
-				return null;
-			}
-			return prefixEncodedPassword.substring(start + 1, end);
-		}
+		String passwordToHash = rawPassword + (storedSalt != null ? storedSalt : "");
+		return getPasswordEncoder().matches(passwordToHash, storedEncodedPassword);
 	}
 
 	/**
 	 * Compare the given hash and the given string-to-hash to see if they are equal. The
 	 * string-to-hash is usually of the form password + salt. <br>
 	 * <br>
-	 * This should be used so that this class can compare against the new correct hashing algorithm
-	 * and the old incorrect hashing algorithm.
+	 * Delegates to the configured {@code openmrsPasswordEncoder}, whose default encoder for matches
+	 * runs the legacy comparisons, so both the old and the current hashing algorithms are accepted.
 	 *
 	 * @param hashedPassword a stored password that has been hashed previously
 	 * @param passwordToHash a string to encode/hash and compare to hashedPassword
@@ -183,15 +107,13 @@ public class Security {
 		if (hashedPassword == null || passwordToHash == null) {
 			throw new APIException("password.cannot.be.null", (Object[]) null);
 		}
-		
-		return hashMatchesLegacy(hashedPassword, passwordToHash)
-			|| getPasswordEncoder().matches(passwordToHash, hashedPassword);
+
+		return getPasswordEncoder().matches(passwordToHash, hashedPassword);
 	}
 
 	/**
 	 * Compares the given hash against the legacy OpenMRS digests (SHA-512, SHA-1 and the old
 	 * incorrect SHA-1 variant) without consulting the configured password encoder. Used by
-	 * {@link #hashMatches(String, String)} to short-circuit the common case and by
 	 * {@link LegacyOpenmrsPasswordEncoder#matches(CharSequence, String)} so that the legacy
 	 * fallback of the {@code openmrsPasswordEncoder} does not recurse back into
 	 * {@link #hashMatches(String, String)}.

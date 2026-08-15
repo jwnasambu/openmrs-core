@@ -16,11 +16,12 @@ import org.springframework.security.crypto.password.PasswordEncoder;
  * SHA-512 over {@code password + salt}, with the older SHA-1 variants still accepted so existing
  * rows keep authenticating.
  * <p>
- * OpenMRS keeps the hash and the salt in two separate columns, while {@code PasswordEncoder} works
- * with a single encoded value, so {@link #encode(CharSequence)} returns the two joined as
- * {@code hash:salt} and {@link #matches(CharSequence, String)} accepts that same shape, as well as
- * a bare hash with no salt part. The joined form is a convention internal to this class; it is
- * never itself stored.
+ * Callers combine the secret with the salt themselves ({@code secret + salt}) before calling this
+ * encoder. {@link #encode(CharSequence)} generates a fresh salt and returns the digest joined with
+ * it as {@code hash:salt}; that value is what {@link Security#encodePassword(String)} persists
+ * (prefixed with the encoder id, e.g. {@code {legacy}}). {@link #matches(CharSequence, String)}
+ * accepts that same shape, as well as a bare hash with no salt part for values written by older
+ * OpenMRS versions.
  *
  * @since 2.9.0, 3.0.0
  */
@@ -29,22 +30,6 @@ public class LegacyOpenmrsPasswordEncoder implements PasswordEncoder {
 	@Override
 	public String encode(CharSequence rawPassword) {
 		return hashAndFormat(rawPassword, Security.getRandomToken());
-	}
-
-	/**
-	 * Encodes a password using a specific salt instead of generating a new one.
-	 * Used for password changes where the existing salt must be preserved
-	 * (e.g., to keep secret-answer hashes valid).
-	 *
-	 * @param rawPassword the password to encode
-	 * @param salt the salt to use (must not be null or empty)
-	 * @return the encoded password as {@code hash:salt}
-	 */
-	String encodeWithSalt(CharSequence rawPassword, String salt) {
-		if (salt == null || salt.isEmpty()) {
-			throw new IllegalArgumentException("Salt must not be null or empty");
-		}
-		return hashAndFormat(rawPassword, salt);
 	}
 
 	@Override

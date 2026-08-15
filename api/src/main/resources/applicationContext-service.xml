@@ -28,24 +28,19 @@
             http://www.springframework.org/schema/util/spring-util-3.0.xsd
 			http://www.springframework.org/schema/cache
 			http://www.springframework.org/schema/cache/spring-cache.xsd">
-	
+
 	<bean class="org.openmrs.api.impl.GlobalLocaleList" id="globalLocaleList"/>
 
-	<!--
-		openmrsPasswordEncoder is a DelegatingPasswordEncoder. Security#getPasswordEncoder() sets its
-		defaultPasswordEncoderForMatches to a default encoder that falls back to the
-		LegacyOpenmrsPasswordEncoder, which is what matches the bare "hash:salt" values with no {id}
-		prefix that existing rows store. Any future encoder gets registered here under its own id.
-	-->
+	<bean id="legacyPasswordEncoder" class="org.openmrs.util.LegacyOpenmrsPasswordEncoder"/>
+
 	<bean id="openmrsPasswordEncoder" class="org.springframework.security.crypto.password.DelegatingPasswordEncoder">
 		<constructor-arg index="0" value="legacy"/>
 		<constructor-arg index="1">
 			<map>
-				<entry key="legacy">
-					<bean class="org.openmrs.util.LegacyOpenmrsPasswordEncoder"/>
-				</entry>
+				<entry key="legacy" value-ref="legacyPasswordEncoder"/>
 			</map>
 		</constructor-arg>
+		<property name="defaultPasswordEncoderForMatches" ref="legacyPasswordEncoder"/>
 	</bean>
 
 	<!--  **************************  EVENT LISTENERS ***************************** -->
